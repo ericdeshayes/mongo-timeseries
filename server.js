@@ -68,8 +68,24 @@ io.sockets.on('connection', function (socket) {
 			console.log((counter++) + "considering "+new Date(i));
 			console.log("between "+new Date(i-timeframeRange)+" and "+new Date(i+timeframeRange));
 			
-			var aggregate = collection.aggregate( [ { 'owner' :  { $eq : array[0]} , { 'securityID' :  { $eq : array[1]} },{ 'timestamp' : { $gte: new Date(i-timeframeRange) }}, { 'timestamp' : { $lt: new Date(i+timeframeRange) }}},
-									{ $project : { timestamp : new Date(i), _id:0, maxBidDepth : { $max: "$maxBidDepth" }, maxOfferDepth : { $max : "$maxOfferDepth"  } }}
+			var aggregate = collection.aggregate( 
+					[
+					 	
+						 	{ 'owner' :  { $eq : array[0]} } , 
+					 		{ 'securityID' :  { $eq : array[1]} },
+						 	{ 'timestamp' : { $gte: new Date(i-timeframeRange) }}, 
+						 	{ 'timestamp' : { $lt: new Date(i+timeframeRange) }}
+						 	
+					 	,
+									
+					 	{ $project : 
+					 		{ 
+					 			timestamp : new Date(i), 
+					 			_id:0, 
+					 			maxBidDepth : { $max: "$maxBidDepth" }, 
+					 			maxOfferDepth : { $max : "$maxOfferDepth"  } 
+				 			}
+					 	}
 			]); 
 			
 		}
