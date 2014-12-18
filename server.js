@@ -1,13 +1,14 @@
 var http = require('http');
 var fs = require('fs');
 
-var databaseURI = "edeshayes3:27017/FSSRates";
+var databaseURI = "192.168.145.213:27017/FSSRates";
 var db = require("mongojs").connect(databaseURI, ["AllMarketDataByYear", "AllMarketDataByMonth", "AllMarketDataByDay", "AllMarketDataByHour"]);
 
 var collectionByYear = db.AllMarketDataByYear;
 var collectionByMonth = db.AllMarketDataByMonth;
 var collectionByDay = db.AllMarketDataByDay;
 var collectionByHour = db.AllMarketDataByHour;
+var collectionBySecond = db.AllMarketDataBySecond;
 var nbOfPoints = 50;
 
 var server = http.createServer(function(req, res) {
@@ -38,7 +39,7 @@ io.sockets.on('connection', function (socket) {
 		var secondsPerYear =  366 * secondsPerDay;
 
 		//if (timeDiff < secondsPerDay) {
-			collection = collectionByHour;
+//			collection = collectionByHour;
 		//} else if (timeDiff < secondsPerMonth) {
 		//	collection = collectionByDay;
 		//} else if (timeDiff < secondsPerYear) {
@@ -46,7 +47,8 @@ io.sockets.on('connection', function (socket) {
 		//}  else {
 		//	collection = collectionByYear;
 		//}
-				
+		collection = collectionBySecond;
+			
 		var points = [];
 		
 		console.log('using  : '+collection);
@@ -75,9 +77,7 @@ io.sockets.on('connection', function (socket) {
 					 		{ 'securityID' :  { $eq : array[1]} },
 						 	{ 'timestamp' : { $gte: new Date(i-timeframeRange) }}, 
 						 	{ 'timestamp' : { $lt: new Date(i+timeframeRange) }}
-						 	
 					 	,
-									
 					 	{ $project : 
 					 		{ 
 					 			timestamp : new Date(i), 
@@ -118,7 +118,7 @@ io.sockets.on('connection', function (socket) {
     });	
 	
 	socket.on('distrinct stream', function (array) {
-		collectionByMonth.distinct('owner', function(err, list) {
+		collectionByHour.distinct('owner', function(err, list) {
 			if( err || !list) console.log('No streams found for '+array[0]);
 			else {
 				console.log('total of streams : '+list.length);
@@ -129,7 +129,7 @@ io.sockets.on('connection', function (socket) {
 	
 	// extract distinct symbol
 	socket.on('distrinct symbol', function (unused) {
-		collectionByMonth.distinct('securityID', function(err, list) {
+		collectionByHour.distinct('securityID', function(err, list) {
 			if( err || !list) console.log('No symbol found');
 			else {
 				console.log('total of symbols : '+list.length);
