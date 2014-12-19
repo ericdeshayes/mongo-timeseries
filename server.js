@@ -1,9 +1,11 @@
+console.log('starting');
+
 var http = require('http');
 var fs = require('fs');
 
 var databaseURI = "192.168.145.213:27017/FSSRates";
-var db = require("mongojs").connect(databaseURI, ["AllMarketDataByYear", "AllMarketDataByMonth", "AllMarketDataByDay", "AllMarketDataByHour"]);
-
+//var db = require("mongojs").connect(databaseURI, ["AllMarketDataByYear", "AllMarketDataByMonth", "AllMarketDataByDay", "AllMarketDataByHour", "AllMarketDataBySecond"]);
+var db = require("mongojs").connect(databaseURI, ["AllMarketDataByHour", "AllMarketDataBySecond"]);
 var collectionByYear = db.AllMarketDataByYear;
 var collectionByMonth = db.AllMarketDataByMonth;
 var collectionByDay = db.AllMarketDataByDay;
@@ -21,6 +23,7 @@ var server = http.createServer(function(req, res) {
 var io = require('socket.io').listen(server);
 
 io.sockets.on('connection', function (socket) {
+	console.log('on connection');
 	// load a new serie
     socket.on('addSeries', function (array) {
 		console.log('addSeries for : '+array);
@@ -67,26 +70,46 @@ io.sockets.on('connection', function (socket) {
 			console.log("end "+new Date(end));
 			var counter = 0;
 		for (var i = start; i<=end; i += timeframeRange)  {
-			console.log((counter++) + "considering "+new Date(i));
-			console.log("between "+new Date(i-timeframeRange)+" and "+new Date(i+timeframeRange));
+			var rangeStart = new Date(i-timeframeRange);
+			var rangeEnd = new Date(i+timeframeRange);
+			console.log("considering "+new Date(i));
+			console.log("between "+rangeStart+" and "+rangeEnd);
 			
 			var aggregate = collection.aggregate( 
 					[
-					 	
-						 	{ 'owner' :  { $eq : array[0]} } , 
-					 		{ 'securityID' :  { $eq : array[1]} },
-						 	{ 'timestamp' : { $gte: new Date(i-timeframeRange) }}, 
-						 	{ 'timestamp' : { $lt: new Date(i+timeframeRange) }}
-					 	,
-					 	{ $project : 
-					 		{ 
-					 			timestamp : new Date(i), 
-					 			_id:0, 
-					 			maxBidDepth : { $max: "$maxBidDepth" }, 
-					 			maxOfferDepth : { $max : "$maxOfferDepth"  } 
-				 			}
+					 	{ $match:
+						 	{
+					 			'owner' :  { $eq : array[0]} , 
+					 			'securityID' :  { $eq : array[1]} ,
+					 			'timestamp' : { $gte:rangeStart }, 
+					 			'timestamp' : { $lt: rangeEnd }
+						 	}
 					 	}
-			]); 
+					 	,{ $unwind : '$values'
+					 	},{ $unwind : '$values'
+					 	}
+//					 	,{ $project : 
+//					 		{ 
+//					 			timestamp : i, 
+//					 			_id:0, 
+//					 			maxBidDepth : { $max: '$maxBidDepth' }, 
+//					 			maxOfferDepth : { $max : '$maxOfferDepth'  } 
+//				 			}
+//					 	}
+					],
+					function(err, entries) {
+						if( err || !entries) console.log('No entries found between '+dateStart+' and '+dateEnd+' and error is '+err);
+						else {
+							console.log('tutu count : '+entries.length+' between '+rangeStart+' and '+rangeEnd);
+							for(var i=0 ; i < entries.length ; i++) {
+								//array += '['+entries[i]._id.ts.getTimeentries[i].value.count+']';
+								console.log('time '+entries[i]);
+							}
+						}
+					}
+						);
+			console.log(aggregate);
+			
 			
 		}
 		
