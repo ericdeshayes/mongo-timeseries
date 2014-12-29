@@ -50,22 +50,17 @@
 			</p>
 			
 			<p>
-			<p><strong>Precision :</strong></p>
-			<select id="precision">
-			  <option value="HOUR">hour</option>
-			  <option value="DAY">day</option>
-			  <option value="MONTH">month</option>
-			  <option value="YEAR">year</option>
+			<p>
+			
+			<strong>Precision:</strong></p>
+		 	<input type="checkbox" value="detailled" id="precisionCB" />
+			<label for="precisionCB">consider all points</label>
+			</p>
+			<p><strong>Colo :</strong></p>
+			<select id="colo">
+			  <option value="NY2">NY2</option>
 			</select>
 			</p>
-		<!--
-			<p><strong>LP :</strong></p>
-			<select id="lp">
-			  <option value="COBA">COBA</option>
-			  <option value="UBS">UBS</option>
-			</select>
-			</p>
-		-->
 		</form>
 		
 		<p><strong>Graphique :</strong></p>
@@ -164,7 +159,6 @@
             $('#reload').click(function () {
 				console.log('reload');
 				
-				var lp = $('#lp').val();
 				
 				var streamList = [];
 				var inputs =$('#streamCheckBoxes').find('input');
@@ -187,7 +181,8 @@
 				var startTime = start.getDate().getTime();
 				var endTime = end.getDate().getTime();
 				
-				var precision = $('#precision').val();
+				var colo = $('#colo').val();
+				var precision = $('#precisionCB')[0].checked;
 				
 				$('#container').highcharts().destroy();
 				reset();
@@ -198,19 +193,19 @@
 					streamList.forEach(function(stream) {
 						if($('#reloadSymbolCB')[0].checked) {
 							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ [stream], [symbol], startTime, endTime,precision, lp, stream+'-'+symbol]);	
+								socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision]);	
 							});
 						} else {
-							socket.emit('addSeries', [ [stream], symbolList, startTime, endTime,precision, lp, stream+'-'+symbolList]);	
+							socket.emit('addSeries', [ [stream], symbolList, colo, startTime, endTime,precision]);	
 						}
 					});
 				} else {
 						if($('#reloadSymbolCB')[0].checked) {
 							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [streamList, [symbol], startTime, endTime,precision, lp, streamList+'-'+symbol]);	
+								socket.emit('addSeries', [streamList, [symbol], colo, startTime, endTime,precision]);	
 							});
 						} else {
-							socket.emit('addSeries', [streamList, symbolList, startTime, endTime,precision, lp, streamList+'-'+symbolList]);		
+							socket.emit('addSeries', [streamList, symbolList, colo, startTime, endTime,precision]);		
 						}
 				}					
             })
@@ -239,27 +234,27 @@
 				var startTime = start.getDate().getTime();
 				var endTime = end.getDate().getTime();
 				
-				var precision = $('#precision').val();
-				var lp = $('#lp').val();
+				var colo = $('#colo').val();
+				var precision = $('#precisionCB')[0].checked;
 				
 				console.log('load for : '+[streamList, symbolList, startTime, endTime]);
 				if($('#reloadStreamCB')[0].checked) {
 					streamList.forEach(function(stream) {
 						if($('#reloadSymbolCB')[0].checked) {
 							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ [stream], [symbol], startTime, endTime,precision, lp, stream+'-'+symbol]);	
+								socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision]);	
 							});
 						} else {
-							socket.emit('addSeries', [ [stream], symbolList, startTime, endTime,precision, lp, stream+'-'+symbolList]);	
+							socket.emit('addSeries', [ [stream], symbolList, colo, startTime, endTime,precision,]);	
 						}
 					});
 				} else {
 						if($('#reloadSymbolCB')[0].checked) {
 							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ streamList, [symbol], startTime, endTime,precision, lp, streamList+'-'+symbol]);	
+								socket.emit('addSeries', [ streamList, [symbol], colo, startTime, endTime,precision]);	
 							} );
 						} else {
-							socket.emit('addSeries', [streamList, symbolList, startTime, endTime,precision, lp, streamList+'-'+symbolList]);		
+							socket.emit('addSeries', [streamList, symbolList, colo, startTime, endTime,precision]);		
 						}
 				}					
             })
