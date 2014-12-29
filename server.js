@@ -5,13 +5,12 @@ var fs = require('fs');
 
 var databaseURI = "192.168.145.213:27017/FSSRates";
 //var db = require("mongojs").connect(databaseURI, ["AllMarketDataByYear", "AllMarketDataByMonth", "AllMarketDataByDay", "AllMarketDataByHour", "AllMarketDataBySecond"]);
-var db = require("mongojs").connect(databaseURI, ["AllMarketDataByHour", "AllMarketDataBySecond"]);
-var collectionByYear = db.AllMarketDataByYear;
-var collectionByMonth = db.AllMarketDataByMonth;
-var collectionByDay = db.AllMarketDataByDay;
-var collectionByHour = db.AllMarketDataByHour;
+var db = require("mongojs").connect(databaseURI, ["AllMarketDataWeekByYear", "AllMarketDataDayByWeek" , "AllMarketDataHourByDay" , "AllMarketDataBySecond"]);
+var collectionWeekByYear = db.AllMarketDataWeekByYear;
+var collectionDayByWeek = db.AllMarketDataDayByWeek;
+var collectionHourByDay = db.AllMarketDataHourByDay;
 var collectionBySecond = db.AllMarketDataBySecond;
-var nbOfPoints = 50;
+var nbOfPoints = 100;
 
 var server = http.createServer(function(req, res) {
     fs.readFile('./index.html', 'utf-8', function(error, content) {
@@ -29,119 +28,205 @@ io.sockets.on('connection', function (socket) {
 		console.log('addSeries for : '+array);
 		console.log('symbols: '+array[1]);
 		console.log('streams: '+array[0]);
-		var dateStart  = new Date(array[2]);
-		var dateEnd    = new Date(array[3]);
+		var colo  = new Date(array[2]);
+		var dateStart  = new Date(array[3]);
+		var dateEnd    = new Date(array[4]);
+		var details = array[5];
+		
+		if (details) {
+			extractDetailledInformation(array);
+		} else {
+			extractAggregatedInformation(array);
+		}
+    });	
+
+    
+    function extractDetailledInformation(array) {
+    	console.log('symbols: '+array[1]);
+		console.log('streams: '+array[0]);
+		var owner = array[0];
+		var symbol = array[1];
+		var colo = array[2];
+		var dateStart  = new Date(array[3]);
+		var dateEnd    = new Date(array[4]);
+		var collection = collectionBySecond;
+		var timeframeRange = (dateEnd - dateStart) / nbOfPoints; 
+		console.log("timeframeRange "+timeframeRange);
+
+		var points1 = [];
+		var points2 = [];
 		console.log( 'dateStart '+dateStart);
 		console.log( 'end '+dateEnd);
 		var timeDiff = dateEnd.getTime() - dateStart.getTime();
 		
-		var collection;
-		var secondsPerHour = 3600 * 1000;
-		var secondsPerDay =  24 * secondsPerHour;
-		var secondsPerMonth =  31 * secondsPerDay;
-		var secondsPerYear =  366 * secondsPerDay;
-
-		//if (timeDiff < secondsPerDay) {
-//			collection = collectionByHour;
-		//} else if (timeDiff < secondsPerMonth) {
-		//	collection = collectionByDay;
-		//} else if (timeDiff < secondsPerYear) {
-		//	collection = collectionByMonth;
-		//}  else {
-		//	collection = collectionByYear;
-		//}
-		collection = collectionBySecond;
-			
-		var points = [];
-		
-		console.log('using  : '+collection);
-		
-			
-		var timeframeRange = (dateEnd - dateStart) / nbOfPoints; 
-		console.log("timeframeRange "+timeframeRange);
-
-		console.log("dateStart "+new Date(dateStart));
-			console.log("dateEnd "+new Date(dateEnd));
-
-			var start = dateStart / 1000 * 1000 //to round to the second
-		var end = dateEnd / 1000 * 1000 //to round to the second
-		
-			console.log("start "+new Date(start));
-			console.log("end "+new Date(end));
-			var counter = 0;
-		for (var i = start; i<=end; i += timeframeRange)  {
-			var rangeStart = new Date(i-timeframeRange);
-			var rangeEnd = new Date(i+timeframeRange);
-			console.log("considering "+new Date(i));
-			console.log("between "+rangeStart+" and "+rangeEnd);
-			
-			var aggregate = collection.aggregate( 
-					[
-					 	{ $match:
-						 	{
-					 			'owner' :  { $eq : array[0]} , 
-					 			'securityID' :  { $eq : array[1]} ,
-					 			'timestamp' : { $gte:rangeStart }, 
-					 			'timestamp' : { $lt: rangeEnd }
-						 	}
+		console.log("detailled aggregating "+timeframeRange);
+		var aggregate = collection.aggregate( 
+				[
+				 	{ $match:
+					 	{ $and: 
+				 			[
+					 			{'owner' :  { $in : array[0]} }, 
+					 			{'securityID' :  { $in : array[1]} },
+					 			{'colo' :  { $eq : colo} },
+					 			{'timestamp' : { $gte: dateStart } }, 
+					 			{'timestamp' : { $lt: dateEnd } }
+				 			
+					 	    ]
 					 	}
-					 	,{ $unwind : '$values'
-					 	},{ $unwind : '$values'
-					 	}
-//					 	,{ $project : 
-//					 		{ 
-//					 			timestamp : i, 
-//					 			_id:0, 
-//					 			maxBidDepth : { $max: '$maxBidDepth' }, 
-//					 			maxOfferDepth : { $max : '$maxOfferDepth'  } 
-//				 			}
-//					 	}
-					],
-					function(err, entries) {
-						if( err || !entries) console.log('No entries found between '+dateStart+' and '+dateEnd+' and error is '+err);
-						else {
-							console.log('tutu count : '+entries.length+' between '+rangeStart+' and '+rangeEnd);
-							for(var i=0 ; i < entries.length ; i++) {
-								//array += '['+entries[i]._id.ts.getTimeentries[i].value.count+']';
-								console.log('time '+entries[i]);
-							}
-						}
+				 	}
+			 		 ,{$group: {
+					 			'_id' : {
+					                'timestampAsLong' : { 
+					                	'$subtract' :
+					                		[ 
+					                		  {'$divide' : ['$timestampAsLong', timeframeRange ]}, 
+					                		  { '$mod' : [
+					                		              {'$divide' : ['$timestampAsLong', timeframeRange ]}
+					                		              ,1
+					                		              ] 
+					                		  }
+					                		  ] 
+					                }
+					            }
+			            ,'max_items' : { '$max' : '$value.items'}
+			            ,'max_bid' : { '$max' : '$value.maxBidDepth'}
+			            ,'max_offer' : { '$max' : '$value.maxOfferDepth'}
+			            ,'avg_items' : { '$avg' : '$value.items'}
+			            ,'avg_bid' : { '$avg' : '$value.maxBidDepth'}
+			            ,'avg_offer' : { '$avg' : '$value.maxOfferDepth'}
+			 		 	}
+			 		 }
+			 		 ,{$sort:
+			 			 { '_id.timestampAsLong': 1}
+			 		 }
+				],
+				function(err, entries) {
+					console.log("aggregate function");
+					if( err || !entries){
+						console.log('No entries found between '+dateStart+' and '+dateEnd);
+						console.log(' and error is '+err);
 					}
-						);
-			console.log(aggregate);
-			
-			
-		}
-		
-		collection.find({ $and: [ { 'owner' :  { $in : array[0]} }, { 'securityID' :  { $in : array[1]} },{ 'timestamp' : { $gte: dateStart }}, { 'timestamp' : { $lte: dateEnd }}] },
-			function(err, entries) {
-			if( err || !entries) console.log('No entries found between '+dateStart+' and '+dateEnd+' and error is '+err);
-			else {
-				console.log('toto count : '+entries.length+' between '+new Date(array[2])+' and '+new Date(array[3]));
-				for(var i=0 ; i < entries.length ; i++) {
-					//array += '['+entries[i]._id.ts.getTimeentries[i].value.count+']';
-					console.log('time '+entries[i].timestamp);
-					var time = entries[i].timestamp.getTime();
-//					console.log('time '+entries[i].timestamp);
-	//				console.log('time '+entries[i].timestamp.getTime());
-					 for(var j=0 ; j < entries[i].values.length ; j++) {
-						for(var k=0 ; k < entries[i].values[j].length ; k++) {
-							var value = entries[i].values[j][k];
-							//console.log('j '+j);
-							//console.log('k '+k);
-							//console.log('time '+time);
-							//console.log('value '+value);
-							points.push( [(time+value.deltaTimestamp), value.items]);
-						}	
+					else {
+						console.log('tutu count : '+entries.length+' between '+dateStart+' and '+dateEnd);
+						for(var i=0 ; i < entries.length ; i++) {
+							//array += '['+entries[i]._id.ts.getTimeentries[i].value.count+']';
+							var ts = entries[i]._id.timestampAsLong * timeframeRange;
+//							console.log('timeStampAsDate '+entries[i].timestampAsLong);
+//							console.log('_id '+new Date(ts) );
+//							console.log('sum_value '+entries[i].sum_value);
+							//console.log('maxOfferDepth '+entries[i].value.maxOfferDepth);
+							points1.push( [(entries[i]._id.timestampAsLong * timeframeRange), entries[i].max_bid]);
+							points2.push( [(entries[i]._id.timestampAsLong * timeframeRange), entries[i].avg_b]);
+						}
+						socket.emit('addSeries', {data: points1, name: array[0]+'-'+array[1]+'-max'});
+						socket.emit('addSeries', {data: points2, name: array[0]+'-'+array[1]+'-avg'});
+
 					}
 				}
-				socket.emit('addSeries', {data: points, name: array[0]+'-'+array[1]});
-			}
-		});
-    });	
-	
+					);
+		console.log("aggregate done");
+    }
+
+    function extractAggregatedInformation(array) {
+    	console.log('symbols: '+array[1]);
+		console.log('streams: '+array[0]);
+		var owner = array[0];
+		var symbol = array[1];
+		var colo = array[2];
+		var dateStart  = new Date(array[3]);
+		var dateEnd    = new Date(array[4]);
+		var collection;
+		var timeframeRange = dateEnd - dateStart;
+		var itemRange;
+		if (timeframeRange > 24 * 3600 *1000* 31) { //one year
+			collection = collectionWeekByYear;
+			itemRange = 24 * 3600 *1000* 31 * 12;
+		} else if (timeframeRange > 24 * 3600*1000 * 3) { //one week
+			collection = collectionDayByWeek;
+			itemRange = 24 * 3600 *1000 * 7;
+		}  else if (timeframeRange > 24 * 3600 * 1000) { //one day
+			collection = collectionHourByDay;
+			itemRange = 24 * 3600 *1000;
+		}  else  if (timeframeRange > 3600 * 1000) {
+			itemRange = 3600 *1000;
+			collection = collectionMinuteByHour;
+		}  else {
+			extractDetailledInformation(array);
+			return;
+		}
+		console.log("timeframeRange "+timeframeRange);
+
+		var actualDateStart  = new Date(array[3] - itemRange);
+		var actualDateEnd    = new Date(array[4]+ itemRange);
+
+		var points1 = [];
+		var points2 = [];
+		console.log( 'dateStart '+dateStart.getTime());
+		console.log( 'end '+dateEnd.getTime());
+		console.log( 'dateStart '+dateStart);
+		console.log( 'end '+dateEnd);
+		var timeDiff = dateEnd.getTime() - dateStart.getTime();
+		
+		console.log("aggregating "+timeframeRange);
+		console.log("using "+collection);
+		var aggregate = collection.aggregate( 
+				[
+				 	{ $match:
+					 	{ $and: 
+				 			[
+					 			{'owner' :  { $in : array[0]} }
+					 			,{'securityID' :  { $in : array[1]} }
+					 			,{'colo' :  { $eq : colo} }
+					 			,{'timestamp' : { $gte: actualDateStart.getTime() } } 
+					 			,{'timestamp' : { $lt: actualDateEnd.getTime() } }
+				 			
+					 	    ]
+					 	}
+				 	}
+			 		 ,{$unwind: '$values'}
+			 		 ,{ $match:
+					 	{ $and: 
+				 			[
+					 			{'values.timestamp' : { $gte: dateStart.getTime() } }, 
+					 			{'values.timestamp' : { $lt: dateEnd.getTime() } }
+				 			
+					 	    ]
+					 	}
+				 	}
+			 		 ,{$sort:
+			 			 { 'values.timestamp': 1}
+			 		 }
+				],
+				function(err, entries) {
+					console.log("aggregate function");
+					if( err || !entries){
+						console.log('No entries found between '+actualDateStart+' and '+actualDateEnd);
+						console.log(' and error is '+err);
+					}
+					else {
+						console.log('tutu count : '+entries.length+' between '+actualDateStart+' and '+actualDateEnd);
+						for(var i=0 ; i < entries.length ; i++) {
+							//array += '['+entries[i]._id.ts.getTimeentries[i].value.count+']';
+//							console.log('timeStamp1 '+new Date(entries[i].timestamp));
+//							console.log('values '+entries[i].values);
+							console.log('timeStamp2 '+new Date(entries[i].values.timestamp)+ ' ('+new Date(entries[i].timestamp)+')');
+//							console.log('max '+entries[i].values.maxItemsPerSecond);
+//							console.log('avg '+entries[i].values.itemsPerSecond);
+							points1.push( [(entries[i].values.timestamp), entries[i].values.maxItemsPerSecond]);
+							points2.push( [(entries[i].values.timestamp), entries[i].values.itemsPerSecond]);
+						}
+						socket.emit('addSeries', {data: points1, name: array[0]+'-'+array[1]+'-max'});
+						socket.emit('addSeries', {data: points2, name: array[0]+'-'+array[1]+'-avg'});
+
+					}
+				}
+					);
+		console.log("aggregate done");
+    }
+
+    
 	socket.on('distrinct stream', function (array) {
-		collectionByHour.distinct('owner', function(err, list) {
+		collectionWeekByYear.distinct('owner', function(err, list) {
 			if( err || !list) console.log('No streams found for '+array[0]);
 			else {
 				console.log('total of streams : '+list.length);
@@ -152,7 +237,7 @@ io.sockets.on('connection', function (socket) {
 	
 	// extract distinct symbol
 	socket.on('distrinct symbol', function (unused) {
-		collectionByHour.distinct('securityID', function(err, list) {
+		collectionWeekByYear.distinct('securityID', function(err, list) {
 			if( err || !list) console.log('No symbol found');
 			else {
 				console.log('total of symbols : '+list.length);
