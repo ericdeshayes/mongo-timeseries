@@ -36,12 +36,6 @@
 				<input type="button" value="Clear and add serie" id="reload" />
 				<input type="button" value="Add to existing series" id="addSeries" />
 			<p>
-			</p>
-				<input type="checkbox" value="one series per stream" id="reloadStreamCB" />
-				<label for="reloadStreamCB">one series per stream</label>
-				<input type="checkbox" value="one series per symbol" id="reloadSymbolCB" />
-				<label for="reloadSymbolCB">one series per symbol</label>
-			</p>
 			<p>
 				<input type="button" value="Select all streams" id="SAstream" />
 				<input type="button" value="Deselect all streams" id="DAstream" />
@@ -61,6 +55,15 @@
 			  <option value="NY2">NY2</option>
 			</select>
 			</p>
+			<p>
+				<strong>Analytic :</strong></p>
+				<select id="analyticsCB">
+				  <option value="updates">Updates</option>
+				  <option value="depth">Depth</option>
+				  <option value="spread">Spread</option>
+				  <option value="price">Price</option>
+				</select>
+			</p>
 		</form>
 		
 		<p><strong>Graphique :</strong></p>
@@ -69,6 +72,7 @@
 		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
 		<script src="//code.jquery.com/ui/1.11.0/jquery-ui.js"></script>
 		<script src="http://code.highcharts.com/stock/highstock.js"></script>
+		<script src="http://code.highcharts.com/stock/highcharts-more.js"></script>
 		<script src="http://code.highcharts.com/stock/modules/exporting.js"></script>
 		<script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script>
 		<script src="http://tarruda.github.com/bootstrap-datetimepicker/assets/js/bootstrap-datetimepicker.min.js"></script>
@@ -112,11 +116,13 @@
 			
 			socket.on('addSeries', function(json) {
 				//var json = JSON.parse(data);
-				console.log('series add');
+				console.log('series add '+json);
+				console.log(' type '+json.type);
+				console.log(' name '+json.name);
+				console.log(' data '+json.data);
 				if(json.data.length > 0) {
 					var chart = $('#container').highcharts();
-					$('#container').highcharts().addSeries({ name : json.name, data :  json.data});
-					$('#container').highcharts().repaint();
+					$('#container').highcharts().addSeries({ name : json.name,  type : json.type, data :  json.data});
 				}
             })
 			
@@ -183,31 +189,19 @@
 				
 				var colo = $('#colo').val();
 				var precision = $('#precisionCB')[0].checked;
+				var analytics = $('#analyticsCB').val();
 				
 				$('#container').highcharts().destroy();
 				reset();
 				
 				console.log('load for : '+[streamList, symbolList, startTime, endTime]);
 						
-				if($('#reloadStreamCB')[0].checked) {
-					streamList.forEach(function(stream) {
-						if($('#reloadSymbolCB')[0].checked) {
-							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision]);	
-							});
-						} else {
-							socket.emit('addSeries', [ [stream], symbolList, colo, startTime, endTime,precision]);	
-						}
-					});
-				} else {
-						if($('#reloadSymbolCB')[0].checked) {
-							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [streamList, [symbol], colo, startTime, endTime,precision]);	
-							});
-						} else {
-							socket.emit('addSeries', [streamList, symbolList, colo, startTime, endTime,precision]);		
-						}
-				}					
+				streamList.forEach(function(stream) {
+						symbolList.forEach(function(symbol) {
+							socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics]);	
+						});
+						
+				});
             })
 			
             $('#addSeries').click(function () {
@@ -236,27 +230,14 @@
 				
 				var colo = $('#colo').val();
 				var precision = $('#precisionCB')[0].checked;
+				var analytics = $('#analyticsCB')[0].checked;
 				
 				console.log('load for : '+[streamList, symbolList, startTime, endTime]);
-				if($('#reloadStreamCB')[0].checked) {
-					streamList.forEach(function(stream) {
-						if($('#reloadSymbolCB')[0].checked) {
-							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision]);	
-							});
-						} else {
-							socket.emit('addSeries', [ [stream], symbolList, colo, startTime, endTime,precision,]);	
-						}
+				streamList.forEach(function(stream) {
+					symbolList.forEach(function(symbol) {
+						socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics]);	
 					});
-				} else {
-						if($('#reloadSymbolCB')[0].checked) {
-							symbolList.forEach(function(symbol) {
-								socket.emit('addSeries', [ streamList, [symbol], colo, startTime, endTime,precision]);	
-							} );
-						} else {
-							socket.emit('addSeries', [streamList, symbolList, colo, startTime, endTime,precision]);		
-						}
-				}					
+				});
             })
 			
 			$('#SAstream').click(function () {
