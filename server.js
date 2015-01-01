@@ -49,16 +49,21 @@ io.sockets.on('connection', function (socket) {
 		var itemRange;
 		console.log("timeframeRange "+timeframeRange);
 
-		if (timeframeRange < 5 * 60  * 1000) { //less than 5 minutes, use the second detail (max 300 points)
+		if (timeframeRange < 2 * 60  * 1000) { //less than 2 minutes, use the second detail (max 120 points)
 			collection = collectionBySecond;
-		} else if (timeframeRange < 5 * 60 * 60  * 1000) { //less than 5 hours , use the minutes detail (max 300 points)
+			itemRange = 1000; //check +- 1 second 
+		} else if (timeframeRange < 2 * 60 * 60  * 1000) { //less than 2 hours , use the minutes detail (max 120 points)
 			collection = collectionMinuteByHour;
-		} else if (timeframeRange < 7 * 24 * 60 * 60  * 1000) { //less than 7 days, use the hour detail (max 168 points)
+			itemRange = 60*60*1000; //check +- 1 hour 
+		} else if (timeframeRange < 3 * 24 * 60 * 60  * 1000) { //less than 3 days, use the hour detail (max 72 points)
 			collection = collectionHourByDay;
-		} else if (timeframeRange < 20 * 7 * 24 * 60 * 60  * 1000) { //less than 20 weeks, use the day detail (max 140 points)
+			itemRange = 24 * 3600 *1000;//check +- 1 day 
+		} else if (timeframeRange < 10 * 7 * 24 * 60 * 60  * 1000) { //less than 10 weeks, use the day detail (max 70 points)
 			collection = collectionDayByWeek;
+			itemRange = 7 * 24 * 3600 *1000;//check +- 1 week 
 		} else {
 			collection = collectionWeekByYear;
+			itemRange = 365 * 24 * 3600 *1000;//check +- 1 year		
 		} 
 		
 		var actualDateStart  = new Date(array[3] - itemRange);
@@ -73,6 +78,9 @@ io.sockets.on('connection', function (socket) {
 		console.log("aggregating "+timeframeRange);
 		console.log("using "+collection);
 		var analytics = array[6];
+		var threshold = array[7];
+		
+		console.log('threshold '+threshold);
 		var aggregate = collection.aggregate( 
 				[
 				 	{ $match:
@@ -109,7 +117,7 @@ io.sockets.on('connection', function (socket) {
 					}
 					else {
 						console.log('tutu count : '+entries.length+' between '+actualDateStart+' and '+actualDateEnd);
-						processEntries(entries, owner, symbol, colo, analytics);
+						processEntries(entries, owner, symbol, colo, analytics, threshold);
 
 					}
 				}
@@ -117,90 +125,91 @@ io.sockets.on('connection', function (socket) {
 		console.log("aggregate done");
     }
 
-    function processEntries(entries, owner, symbol, colo, analytics) {
+    function processEntries(entries, owner, symbol, colo, analytics, threshold) {
     	
     	switch (analytics) {
         case 'updates':
-            handleUpdates(entries, owner, symbol, colo);
+            handleUpdates(entries, owner, symbol, colo, threshold);
             break;
         case 'depth':
-            handleDepth(entries, owner, symbol, colo);
+            handleDepth(entries, owner, symbol, colo, threshold);
             break;
         case 'spread':
-            handleSpread(entries, owner, symbol, colo);
+            handleSpread(entries, owner, symbol, colo, threshold);
             break;
         case 'price':
-            handlePrice(entries, owner, symbol, colo);
+            handlePrice(entries, owner, symbol, colo, threshold);
             break;
     	}
     	
     }
 
-    function handleUpdates(entries, owner, symbol, colo) {
+    function handleUpdates(entries, owner, symbol, colo, threshold) {
+    	displayRange(entries, owner, symbol, colo, 'minItemsPerSecond', 'maxItemsPerSecond', 'updates-minMax', threshold);
+//    	displayLine(entries, owner, symbol, colo, 'itemsPerSecond', 'updates-avg');
+    }
+    
+
+    function displayRange(entries, owner, symbol, colo, minKey, maxKey, label, threshold) {
+    	var consider = true;
+    	if (threshold) {
+    		consider = false;
+    	}
     	var rangePoints = [];
-    	var avgPoints = [];
 		for(var i=0 ; i < entries.length ; i++) {
-			console.log('entry ts: '+entries[i].values.timestamp);
-			console.log('entry minItemsPerSecond: '+entries[i].values.minItemsPerSecond);
-			console.log('entry maxItemsPerSecond: '+entries[i].values.maxItemsPerSecond);
-			console.log('entry itemsPerSecond: '+entries[i].values.itemsPerSecond);
-			rangePoints.push( [(entries[i].values.timestamp), entries[i].values.minItemsPerSecond, entries[i].values.maxItemsPerSecond]);
-			avgPoints.push( [(entries[i].values.timestamp), entries[i].values.itemsPerSecond]);
+			var min = eval('entries[i].values.'+minKey);
+			var max = eval('entries[i].values.'+maxKey);
+	    	if (threshold) {
+	    		if (max > threshold) {
+	    			consider = true;
+				}
+	    	}
+	    	rangePoints.push( [(entries[i].values.timestamp), min, max]);
 		}
-		socket.emit('addSeries', {data: rangePoints, name: colo+'-'+owner+'-'+symbol+'-updates-minMax', type: 'arearange'});
-		socket.emit('addSeries', {data: avgPoints, name: colo+'-'+owner+'-'+symbol+'-updates-avg', type: 'line'});
+		if (consider) {
+	    	
+			socket.emit('addSeries', {data: rangePoints, name: colo+'-'+owner+'-'+symbol+'-'+label, type: 'arearange'});
+		}
     }
     
-
-    function handleDepth(entries, owner, symbol, colo) {
-
-
-    	var bidPoints = [];
-    	var offerPoints = [];
-		for(var i=0 ; i < entries.length ; i++) {
-			bidPoints.push( [(entries[i].values.timestamp), entries[i].values.bidDepth, entries[i].values.maxBidDepth]);
-			offerPoints.push( [(entries[i].values.timestamp), entries[i].values.offerDepth, entries[i].values.maxOfferDepth]);
-		}
-		socket.emit('addSeries', {data: bidPoints, name: colo+'-'+owner+'-'+symbol+'-bid', type: 'arearange'});
-		socket.emit('addSeries', {data: offerPoints, name: colo+'-'+owner+'-'+symbol+'-offer', type: 'arearange'});
-    }
-    
-
-    function handleSpread(entries, owner, symbol, colo) {
-
-    		
-    	var rangePoints = [];
+    function displayLine(entries, owner, symbol, colo, key, label, threshold) {
+    	var consider = true;
+    	if (threshold) {
+    		consider = false;
+    	}
     	var avgPoints = [];
 		for(var i=0 ; i < entries.length ; i++) {
-			rangePoints.push( [(entries[i].values.timestamp), entries[i].values.minSpread, entries[i].values.maxSpread]);
-			avgPoints.push( [(entries[i].values.timestamp), entries[i].values.spread]);
-		}
-		socket.emit('addSeries', {data: rangePoints, name: colo+'-'+owner+'-'+symbol+'-spread-minMax', type : 'arearange'});
-		socket.emit('addSeries', {data: avgPoints, name: colo+'-'+owner+'-'+symbol+'-spread-avg', type : 'line'});
-    }
-    
-
-    function handlePrice(entries, owner, symbol, colo) {
-
-	var rangePoints = [];
-    	var avgPoints = [];
-		for(var i=0 ; i < entries.length ; i++) {
-			var bestBid = entries[i].values.bestBid;
-			var bestOffer = entries[i].values.bestOffer;
-			console.log('entry ts: '+entries[i].values.timestamp);
-			console.log('entry bestBid: '+entries[i].values.bestBid);
-			console.log('entry bestOffer: '+entries[i].values.bestOffer);
-			console.log('entry mid: '+entries[i].values.mid);
+			var avg = eval('entries[i].values.'+key);
 			
-//			if (bestBid < bestOffer) {
-				rangePoints.push( [(entries[i].values.timestamp), entries[i].values.bestBid, entries[i].values.bestOffer]);
-//			}
-			avgPoints.push( [(entries[i].values.timestamp), entries[i].values.mid]);
+	    	if (threshold) {
+	    		if (avg > threshold) {
+	    			consider = true;
+				}
+	    	}
+
+	    	
+			avgPoints.push( [(entries[i].values.timestamp), avg]);
 		}
-		socket.emit('addSeries', {data: rangePoints, name: colo+'-'+owner+'-'+symbol+'-bid-offer', type : 'areasplinerange'});
-		socket.emit('addSeries', {data: avgPoints, name: colo+'-'+owner+'-'+symbol+'-mid', type : 'line'});
+		if (consider) {
+		socket.emit('addSeries', {data: avgPoints, name: colo+'-'+owner+'-'+symbol+'-'+label, type: 'line'});
+		}
     }
 
+    function handleSpread(entries, owner, symbol, colo, threshold) {
+    	displayLine(entries, owner, symbol, colo, 'spread', 'spread', threshold);
+    	displayRange(entries, owner, symbol, colo, 'minSpread', 'maxSpread', 'spread-minMax', threshold);
+    }
+    
+
+    function handlePrice(entries, owner, symbol, colo, threshold) {
+    	displayLine(entries, owner, symbol, colo, 'mid', 'mid', threshold);
+    	displayRange(entries, owner, symbol, colo, 'bestBid', 'bestOffer', 'bid-offer', threshold);
+    }
+
+    function handleDepth(entries, owner, symbol, colo, threshold) {
+    	displayLine(entries, owner, symbol, colo, 'maxBidDepth', 'bid', threshold);
+    	displayLine(entries, owner, symbol, colo, 'maxOfferDepth', 'offer', threshold);
+    }
     
 	socket.on('distrinct stream', function (array) {
 		collectionWeekByYear.distinct('owner', function(err, list) {

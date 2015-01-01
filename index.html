@@ -64,7 +64,12 @@
 				  <option value="price">Price</option>
 				</select>
 			</p>
+			<p>
+				<label for="thresholdInput">Threshold</label>
+				<input type="number" id="thresholdInput"/>
+			</p>
 		</form>
+		
 		
 		<p><strong>Graphique :</strong></p>
   		<div id="container" style="height: 400px; min-width: 310px"></div>
@@ -80,10 +85,12 @@
 			$('#start').datetimepicker({
 				format: 'dd/MM/yyyy hh:mm:ss',
 				language: 'en'
+				
 			});
 			$('#end').datetimepicker({
 				format: 'dd/MM/yyyy hh:mm:ss',
 				language: 'en'
+				
 			});
 		  
 		 	
@@ -93,14 +100,40 @@
 			function reset() {
 				
 			$('#container').highcharts('StockChart', {	
-					 rangeSelector: {
-						enabled: true
-					},
-					tooltip: {
+           		 	xAxis: {
+			            events: {
+			                setExtremes: function (e) {
+			                    console.log('<b>Set extremes:</b> e.min: ' + Highcharts.dateFormat(null, e.min) +
+			                        ' | e.max: ' + Highcharts.dateFormat(null, e.max) + ' | e.trigger: ' + e.trigger);
+			                }
+			            }
+			        },   
+   					tooltip: {
 						crosshairs: [true,true]
 					},
-					chart : { type : 'line'},
+					chart : { 
+						type : 'line',
+	    	            zoomType: 'x',
+            			events: {
+			                selection: function (event) {
+			                    if (event.xAxis) {
+			                        console.log('Last selection:<br/>min: ' + Highcharts.dateFormat('%Y-%m-%d', event.xAxis[0].min) +
+			                            ', max: ' + Highcharts.dateFormat('%Y-%m-%d', event.xAxis[0].max));
+			                        var newStartDate = Highcharts.dateFormat('%Y-%m-%d', event.xAxis[0].min);
+			                        var newEndDate = Highcharts.dateFormat('%Y-%m-%d', event.xAxis[0].min);
+			                        $('#start').data('datetimepicker').setDate(event.xAxis[0].min);
+			                        $('#end').data('datetimepicker').setDate(event.xAxis[0].max);
+			                        reload();
+			                    } else {
+			                        console.log('Selection reset');
+			                    }
+			                }
+		           	 	},	
+					},
 					series : [],
+			        rangeSelector: {
+			            selected: 1
+			        },
 					plotOptions : { series : { dataGrouping : { approximation : 'high', enabled: false}, showCheckbox: true}},
 					xAxis : {ordinal: false}
 				});			
@@ -116,10 +149,10 @@
 			
 			socket.on('addSeries', function(json) {
 				//var json = JSON.parse(data);
-				console.log('series add '+json);
-				console.log(' type '+json.type);
-				console.log(' name '+json.name);
-				console.log(' data '+json.data);
+				//console.log('series add '+json);
+				//console.log(' type '+json.type);
+				//console.log(' name '+json.name);
+				//console.log(' data '+json.data);
 				if(json.data.length > 0) {
 					var chart = $('#container').highcharts();
 					$('#container').highcharts().addSeries({ name : json.name,  type : json.type, data :  json.data});
@@ -161,9 +194,9 @@
 					$('<label />', { 'for': 'symbolCB'+id, text: symbol }).appendTo(panel);
 				});				
             })
-			
-            $('#reload').click(function () {
-				console.log('reload');
+
+			function reload() {
+							console.log('reload');
 				
 				
 				var streamList = [];
@@ -191,17 +224,23 @@
 				var precision = $('#precisionCB')[0].checked;
 				var analytics = $('#analyticsCB').val();
 				
+				var threshold= $('#thresholdInput').val();
+				
 				$('#container').highcharts().destroy();
 				reset();
 				
-				console.log('load for : '+[streamList, symbolList, startTime, endTime]);
+				console.log('load for : '+[streamList, symbolList, startTime, endTime, threshold]);
 						
 				streamList.forEach(function(stream) {
 						symbolList.forEach(function(symbol) {
-							socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics]);	
+							socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics, threshold]);	
 						});
 						
 				});
+			
+			}			
+            $('#reload').click(function () {
+            	reload();
             })
 			
             $('#addSeries').click(function () {
@@ -232,10 +271,12 @@
 				var precision = $('#precisionCB')[0].checked;
 				var analytics = $('#analyticsCB')[0].checked;
 				
-				console.log('load for : '+[streamList, symbolList, startTime, endTime]);
+				var threshold= $('#thresholdInput').valueAsNumber;
+				
+				console.log('load for : '+[streamList, symbolList, startTime, endTime, threshold]);
 				streamList.forEach(function(stream) {
 					symbolList.forEach(function(symbol) {
-						socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics]);	
+						socket.emit('addSeries', [ [stream], [symbol], colo, startTime, endTime,precision, analytics, threshold]);	
 					});
 				});
             })
